@@ -1,10 +1,8 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <DFRobotDFPlayerMini.h> // 使用 DFRobot 官方程式庫
 
-// 初始化 LCD 與語音模組
+// 初始化 LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-DFRobotDFPlayerMini myDFPlayer; // 宣告 DFPlayer 物件
 
 // --- 按鈕腳位與數字對應 ---
 const int buttonPins[10] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
@@ -25,18 +23,55 @@ String inputString = "";
 const int maxDigits = 10; 
 bool isCalling = false;   
 
+// 🎯 HW-311 語音模組專用：免程式庫直接發送播放指令
+void playHW311(int trackNumber) {
+  byte playCmd[8] = {0xAA, 0x07, 0x02, 0x00, 0x00, 0x00, 0x00, 0xB3};
+  
+  playCmd[3] = (trackNumber >> 8) & 0xFF; // 曲目高位元
+  playCmd[4] = trackNumber & 0xFF;        // 曲目低位元
+  
+  // 計算校驗碼 (Checksum)
+  int sum = 0;
+  for(int i = 0; i < 6; i++) {
+    sum += playCmd[i];
+  }
+  playCmd[6] = sum & 0xFF;
+  
+  Serial1.write(playCmd, 7); // 透過 D1 (TX) 傳送 7 個位元組給 HW-311
+}
+
+// 🎯 HW-311 語音模組專用：免程式庫直接發送停止指令
+void stopHW311() {
+  byte stopCmd[4] = {0xAA, 0x04, 0x00, 0xAE};
+  Serial1.write(stopCmd, 4);
+}
+
+// 🎯 HW-311 語音模組專用：免程式庫設定音量 (0~30)
+void setVolumeHW311(int vol) {
+  byte volCmd[5] = {0xAA, 0x13, 0x01, 0x00, 0xBE};
+  volCmd[3] = vol & 0xFF;
+  
+  int sum = 0;
+  for(int i = 0; i < 4; i++) {
+    sum += volCmd[i];
+  }
+  volCmd[4] = sum & 0xFF;
+  Serial1.write(volCmd, 5);
+}
+
 void setup() {
   // 設定傳給 TouchDesigner 的序列埠速率
   Serial.begin(115200);
   
-  // 初始化與模組通訊的硬體序列埠 (Arduino R4 專用 Serial1)
+  // 初始化與 HW-311 通訊的硬體序列埠 (Arduino R4 專用 Serial1)
   Serial1.begin(9600); 
   
   lcd.init();
   lcd.backlight();
   
+  // 🎯 重大修改：啟動內建上拉電阻，萬用板按鈕免焊任何電阻！
   for (int i = 0; i < 10; i++) {
-    pinMode(buttonPins[i], INPUT);
+    pinMode(buttonPins[i], INPUT_PULLUP); // 🌟 改為 INPUT_PULLUP
     lastButtonStates[i] = digitalRead(buttonPins[i]); 
   }
   
@@ -46,12 +81,9 @@ void setup() {
   
   showWelcomeScreen();
   
-  // 初始化晶片連線
-  myDFPlayer.begin(Serial1);
-  
-  // 設定音量 (0~30)。接 0.5W 小喇叭給 15 左右最安全、不破音
-  delay(300);
-  myDFPlayer.volume(15); 
+  // 🎯 設定 HW-311 音量為 15，既大聲又保護 0.5W 小喇叭不破音
+  delay(500);
+  setVolumeHW311(15); 
 }
 
 void loop() {
@@ -65,7 +97,7 @@ void loop() {
   if (currentReedState != lastReedState) {
     if (currentTime - lastReedTriggerTime > DEBOUNCE_DELAY) {
       
-      // 当 currentReedState == HIGH，代表磁鐵靠近（COM 與 NO 導通），也就是話筒放回電話底座了
+      // 當 currentReedState == HIGH，代表磁鐵靠近（COM 與 NO 導通），也就是話筒放回電話底座了
       if (currentReedState == HIGH) { 
         // 只要目前有輸入號碼，或者正在通話中，放回話筒就執行掛斷
         if (inputString.length() > 0 || isCalling) {
@@ -99,8 +131,8 @@ void loop() {
                 inputString += numChars[i];
                 updateDisplay();
                 
-                // 每按一鍵，立刻指定播放對應的 0001.mp3 ~ 0010.mp3
-                myDFPlayer.playLargeFolder(1, i + 1); 
+                // 🎯 HW-311 播音：每按一鍵，立刻播放 0001.mp3 ~ 0010.mp3
+                playHW311(i + 1); 
               }
               
               if (inputString.length() == maxDigits) {
@@ -143,15 +175,15 @@ void handleDialSuccess() {
   lcd.setCursor(0, 1);
   lcd.print(inputString);
   
-  // 當按滿 10 碼打通時，自動播放 mp3 資料夾裡的 0011.mp3 通話背景音樂
-  myDFPlayer.playLargeFolder(1, 11); 
+  // 🎯 HW-311 播音：當按滿 10 碼打通時，自動播放 0011.mp3 通話背景音樂
+  playHW311(11); 
 }
 
 void handleHangUp() {
   inputString = "";
   
-  // 掛斷時立刻讓模組停止播放
-  myDFPlayer.stop(); 
+  // 🎯 HW-311 動作：掛斷時立刻讓模組停止播放
+  stopHW311(); 
   
   // 強迫 LCD 重新初始化，洗掉所有亂碼與移位
   lcd.init(); 
