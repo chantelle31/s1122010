@@ -145,6 +145,7 @@ void loop() {
       else if (currentReedState == HIGH) {
         // 🟢【狀態：1】代表話筒被拿起來
         Serial.println("0"); 
+        Serial.println("0"); 
       }
     }
   }
