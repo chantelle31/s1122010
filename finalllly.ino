@@ -138,13 +138,13 @@ void loop() {
         Serial.println(buttonPressCount);
         
         // 🌟 輸出狀態 0 給 TD
-        Serial.println("0"); 
+        Serial.println("1"); 
         
         handleHangUp();
       } 
       else if (currentReedState == HIGH) {
         // 🟢【狀態：1】代表話筒被拿起來
-        Serial.println("1"); 
+        Serial.println("0"); 
       }
     }
   }
