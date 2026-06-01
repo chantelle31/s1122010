@@ -77,7 +77,7 @@ void resetWholeSystem() {
   lastReedState = digitalRead(reedPin);
   
   stopHW311();
-  setVolumeHW311(8); 
+  setVolumeHW311(4); // 🌟 順利改回原本的音量 4
   delay(100);
   showWelcomeScreen();
 }
@@ -115,7 +115,7 @@ void setup() {
   pinMode(reedPin, INPUT_PULLUP);
   
   delay(500);
-  setVolumeHW311(8); 
+  setVolumeHW311(4); // 🌟 順利改回原本的音量 4
   
   resetWholeSystem();
 }
@@ -134,16 +134,15 @@ void loop() {
       
       if (currentReedState == LOW) { 
         // 🛑【狀態：0】代表話筒放回底座（掛斷）
-        // 🌟 把不論按了多少次的總按鍵數（包含第11、12次...）一次傳給 TD
         Serial.println(buttonPressCount);
         
-        // 🌟 輸出狀態 0 給 TD
+        // 🌟 輸出狀態 0 給 TD (掛斷代表狀態結束，丟 1)
         Serial.println("1"); 
         
         handleHangUp();
       } 
       else if (currentReedState == HIGH) {
-        // 🟢【狀態：1】代表話筒被拿起來
+        // 🟢【狀態：1】代表話筒被拿起來 (連續丟兩個 0 給 TD)
         Serial.println("0"); 
         Serial.println("0"); 
       }
@@ -151,9 +150,8 @@ void loop() {
   }
 
   // ──────────────────────────────────────────
-  // 🎹 部分二：偵測「撥號按鈕」（無限續按、保留聲音、螢幕鎖定10碼）
+  // 🎹 部分二：偵測「撥號按鈕」（無線續按、保留聲音、螢幕鎖定10碼）
   // ──────────────────────────────────────────
-  // 🌟 修改核心：拿掉 !isCalling 限制，只要話筒拿起來 (D12 為 HIGH) 就能無限一直按
   if (currentReedState == HIGH) {
     for (int i = 0; i < 10; i++) {
       int currentState = digitalRead(buttonPins[i]);
@@ -165,17 +163,16 @@ void loop() {
           
           if (currentState == LOW) { 
             
-            // 🌟 核心修改 1：只要按鈕被按下，計數器就無條件永遠往上加（按到第 100 下也可以）
             buttonPressCount++; 
             
-            // 🌟 核心修改 2：只有在字數小於 10 碼時才去更新螢幕字串
             if (inputString.length() < maxDigits) {
               inputString += numChars[i];
-              updateDisplay(); // 更新 LCD 顯示目前累積的字
+              updateDisplay(); 
             }
-            // 💡 如果已經滿 10 碼了（按到第 11 下開始），上面這個 if 就不會進去，所以螢幕畫面會完全凍結不動！
             
-            // 🌟 核心修改 3：不論按第幾下、螢幕有沒有動，對應的聲音依然每一次都要發射出來！
+            // 🌟 每次播放前再次確保音量在原本的 4
+            setVolumeHW311(30);
+            delay(10);
             playHW311(i + 1); 
             
           }
